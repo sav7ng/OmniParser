@@ -19,9 +19,9 @@ import numpy as np
 from matplotlib import pyplot as plt
 import easyocr
 from paddleocr import PaddleOCR
-reader = easyocr.Reader(['en'])
+reader = easyocr.Reader(['ch_sim','en'])
 paddle_ocr = PaddleOCR(
-    lang='en',  # other lang also available
+    lang='ch',  # other lang also available
     use_angle_cls=False,
     use_gpu=False,  # using cuda will conflict with pytorch in the same process
     show_log=False,
@@ -280,7 +280,7 @@ def predict(model, image, caption, box_threshold, text_threshold):
     return boxes, logits, phrases
 
 
-def predict_yolo(model, image_path, box_threshold, imgsz):
+def predict_yolo(model, image_path, box_threshold):
     """ Use huggingface model to replace the original model
     """
     # model = model['model']
@@ -288,7 +288,6 @@ def predict_yolo(model, image_path, box_threshold, imgsz):
     result = model.predict(
     source=image_path,
     conf=box_threshold,
-    imgsz=imgsz
     # iou=0.5, # default 0.7
     )
     boxes = result[0].boxes.xyxy#.tolist() # in pixel space
@@ -310,7 +309,7 @@ def get_som_labeled_img(img_path, model=None, BOX_TRESHOLD = 0.01, output_coord_
     if False: # TODO
         xyxy, logits, phrases = predict(model=model, image=image_source, caption=TEXT_PROMPT, box_threshold=BOX_TRESHOLD, text_threshold=TEXT_TRESHOLD)
     else:
-        xyxy, logits, phrases = predict_yolo(model=model, image_path=img_path, box_threshold=BOX_TRESHOLD, imgsz=imgsz)
+        xyxy, logits, phrases = predict_yolo(model=model, image_path=img_path, box_threshold=BOX_TRESHOLD)
     xyxy = xyxy / torch.Tensor([w, h, w, h]).to(xyxy.device)
     image_source = np.asarray(image_source)
     phrases = [str(i) for i in range(len(phrases))]
