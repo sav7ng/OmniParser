@@ -1,4 +1,5 @@
-from typing import Optional
+import json
+from typing import Optional, Tuple
 
 import gradio as gr
 import numpy as np
@@ -8,6 +9,9 @@ import io
 
 
 import base64, os
+
+from PIL.ImageFile import ImageFile
+
 from utils import check_ocr_box, get_yolo_model, get_caption_model_processor, get_som_labeled_img
 import torch
 from PIL import Image
@@ -44,8 +48,9 @@ def process(
     box_threshold,
     iou_threshold,
     use_paddleocr,
+    output_coord_in_ratio,
     imgsz
-) -> Optional[Image.Image]:
+) -> tuple[ImageFile, str, str]:
 
     print(imgsz)
     image_save_path = 'imgs/saved_image_demo.png'
@@ -59,15 +64,19 @@ def process(
         'thickness': max(int(3 * box_overlay_ratio), 1),
     }
     # import pdb; pdb.set_trace()
-
     ocr_bbox_rslt, is_goal_filtered = check_ocr_box(image_save_path, display_img = False, output_bb_format='xyxy', goal_filtering=None, easyocr_args={'paragraph': False, 'text_threshold':0.9}, use_paddleocr=use_paddleocr)
     text, ocr_bbox = ocr_bbox_rslt
     # print('prompt:', prompt)
-    dino_labled_img, label_coordinates, parsed_content_list = get_som_labeled_img(image_save_path, yolo_model, BOX_TRESHOLD = box_threshold, output_coord_in_ratio=True, ocr_bbox=ocr_bbox,draw_bbox_config=draw_bbox_config, caption_model_processor=caption_model_processor, ocr_text=text,iou_threshold=iou_threshold, imgsz=imgsz)
+    dino_labled_img, label_coordinates, parsed_content_list = get_som_labeled_img(image_save_path, yolo_model, BOX_TRESHOLD = box_threshold, output_coord_in_ratio=output_coord_in_ratio, ocr_bbox=ocr_bbox,draw_bbox_config=draw_bbox_config, caption_model_processor=caption_model_processor, ocr_text=text,iou_threshold=iou_threshold, imgsz=imgsz)
     image = Image.open(io.BytesIO(base64.b64decode(dino_labled_img)))
     print('finish processing')
-    parsed_content_list = '\n'.join(parsed_content_list)
-    return image, str(parsed_content_list)
+    # parsed_content_list = '\n'.join(parsed_content_list)
+    parsedContentListJsonStrE = json.dumps(parsed_content_list)
+    parsedContentListJsonStr = parsedContentListJsonStrE.encode('utf-8').decode('unicode_escape')
+    label_coordinates_serializable = {k: v.tolist() if isinstance(v, np.ndarray) else v for k, v in
+                                      label_coordinates.items()}
+    labelCoordinatesJsonStr = json.dumps(label_coordinates_serializable)
+    return image, parsedContentListJsonStr, labelCoordinatesJsonStr
 
 
 
@@ -85,13 +94,16 @@ with gr.Blocks() as demo:
                 label='IOU Threshold', minimum=0.01, maximum=1.0, step=0.01, value=0.1)
             use_paddleocr_component = gr.Checkbox(
                 label='Use PaddleOCR', value=True)
+            output_coord_in_ratio_component = gr.Checkbox(
+                label='Use Output Coord In Ratio', value=False)
             imgsz_component = gr.Slider(
                 label='Icon Detect Image Size', minimum=640, maximum=1920, step=32, value=640)
             submit_button_component = gr.Button(
                 value='Submit', variant='primary')
         with gr.Column():
             image_output_component = gr.Image(type='pil', label='Image Output')
-            text_output_component = gr.Textbox(label='Parsed screen elements', placeholder='Text Output')
+            parsedContentListJsonStr_output_component = gr.Textbox(label='parsedContentListJsonStr', placeholder='Text Output', show_copy_button = True, show_label = True)
+            labelCoordinatesJsonStr_output_component = gr.Textbox(label='labelCoordinatesJsonStr', placeholder='Text Output', show_copy_button = True, show_label = True)
 
     submit_button_component.click(
         fn=process,
@@ -100,9 +112,10 @@ with gr.Blocks() as demo:
             box_threshold_component,
             iou_threshold_component,
             use_paddleocr_component,
+            output_coord_in_ratio_component,
             imgsz_component
         ],
-        outputs=[image_output_component, text_output_component]
+        outputs=[image_output_component, parsedContentListJsonStr_output_component, labelCoordinatesJsonStr_output_component]
     )
 
 # demo.launch(debug=False, show_error=True, share=True)
