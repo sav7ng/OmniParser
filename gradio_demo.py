@@ -71,7 +71,15 @@ def process(
     image = Image.open(io.BytesIO(base64.b64decode(dino_labled_img)))
     print('finish processing')
     # parsed_content_list = '\n'.join(parsed_content_list)
-    parsedContentListJsonStrE = json.dumps(parsed_content_list)
+    parsed_map = {}
+    for item in parsed_content_list:
+        # 从字符串中提取数字和对应的文本
+        key_value = item.split(": ")
+        if len(key_value) == 2:  # 确保分割成功
+            key = int(key_value[0].split()[-1])  # 提取 "Text Box ID N"
+            value = key_value[1]  # 提取文本
+            parsed_map[key] = value
+    parsedContentListJsonStrE = json.dumps(parsed_map)
     parsedContentListJsonStr = parsedContentListJsonStrE.encode('utf-8').decode('unicode_escape')
     label_coordinates_serializable = {k: v.tolist() if isinstance(v, np.ndarray) else v for k, v in
                                       label_coordinates.items()}
